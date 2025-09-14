@@ -52,15 +52,3 @@ jobs:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v5
-
-      - name: Test Local Action
-        id: test-action
-        uses: ./
-        with:
-          oci_repository: ghcr.io/username/repository
-          auth_mode: noauth
-          calver_format: YYYY.MM.MICRO
-
-      - name: Print Output
-        id: output
-        run: echo "${{ steps.test-action.outputs.time }}"

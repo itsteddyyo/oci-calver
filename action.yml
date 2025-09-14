@@ -43,7 +43,6 @@ inputs:
       https://github.com/lets-release/lets-release/blob/main/libs/calver/src/__fixtures__/formats.ts'
     required: false
     default: 'YYYY.MM.MICRO'
-
 # Define your outputs here.
 outputs:
   current:

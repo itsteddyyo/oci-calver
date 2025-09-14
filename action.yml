@@ -1,24 +1,48 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: "OCI CalVer action"
+description: "Compute next CalVer (YYYY.MM.N) for an OCI repo by listing registry tags"
+author: itsteddyyo
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+    icon: calendar
+    color: blue
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
-    required: true
-    default: '1000'
-
+    oci_repository:
+        description: "Full repository path including host and chart name, e.g. ghcr.io/myorg/mycharts/mychart (host/repo_path)"
+        required: true
+    oci_registry_scheme:
+        description: "Scheme to use for registry requests: http or https (default: https)"
+        required: false
+        default: "https"
+    auth_mode:
+        description: "Authentication mode: noauth, basic, bearer (default: basic)"
+        required: false
+        default: "basic"
+    registry_username:
+        description: "Username for basic auth (required if auth_mode=basic)"
+        required: false
+    registry_password:
+        description: "Password for basic auth (required if auth_mode=basic). Also used as bearer token if auth_mode=bearer."
+        required: false
+    timeout_seconds:
+        description: "Request timeout in seconds (default 10)"
+        required: false
+        default: "10"
+    calver_format:
+        description:
+            "CalVer format to use. See https://www.npmjs.com/package/@lets-release/calver and
+            https://github.com/lets-release/lets-release/blob/main/libs/calver/src/__fixtures__/formats.ts"
+        required: false
+        default: "YYYY.MM.MICRO"
 # Define your outputs here.
 outputs:
-  time:
-    description: Your output description here
+    current:
+        description: "The current newest CalVer tag found in the registry"
+    new:
+        description: "The new CalVer tag computed by this action"
 
 runs:
-  using: node24
-  main: dist/index.js
+    using: node24
+    main: dist/index.js

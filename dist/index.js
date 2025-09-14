@@ -41301,33 +41301,31 @@ async function getOciTags() {
   const password = coreExports.getInput('registry_password');
   const scheme = coreExports.getInput('oci_registry_scheme') || 'https';
   const ociRepo = coreExports.getInput('oci_repository', { required: true });
+  coreExports.getInput('allow_initial_nonexistent') == 'true';
 
   const parsedRepo = parseOciReference(ociRepo);
   const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`;
   const timeoutSeconds = parseInt(coreExports.getInput('timeout_seconds') || '10', 10);
 
   if (!['noauth', 'basic', 'bearer'].includes(authMode)) {
-    coreExports.setFailed(`Invalid auth_mode: ${authMode}`);
-    return
+    throw new Error(`Invalid auth_mode: ${authMode}`)
   }
-  if (authMode === 'basic' && (!username || !password)) {
-    coreExports.setFailed(
-      'registry_username and registry_password are required for basic auth'
-    );
-    return
+  if (authMode == 'basic' && (!username || !password)) {
+    throw new Error(
+      `registry_username and registry_password are required for basic auth`
+    )
   }
-  if (authMode === 'bearer' && !password) {
-    coreExports.setFailed(
+  if (authMode == 'bearer' && !password) {
+    throw new Error(
       'registry_password (bearer token) is required for bearer auth'
-    );
-    return
+    )
   }
 
   const headers = { Accept: 'application/json' };
-  if (authMode === 'basic') {
+  if (authMode == 'basic') {
     const token = Buffer.from(`${username}:${password}`).toString('base64');
     headers['Authorization'] = `Basic ${token}`;
-  } else if (authMode === 'bearer') {
+  } else if (authMode == 'bearer') {
     headers['Authorization'] = `Bearer ${password}`;
   }
 
@@ -41338,24 +41336,26 @@ async function getOciTags() {
   try {
     res = await fetch(url, { headers, signal: controller.signal });
   } catch (err) {
-    coreExports.setFailed(`Failed to call registry: ${err.message}`);
-    return
+    throw new Error(`Failed to call registry: ${err.message}`)
   } finally {
     clearTimeout(timeout);
   }
 
+  if (res.status == 404) {
+    coreExports.info('Repository does not exist. Assuming no tags.');
+    return []
+  }
+
   if (!res.ok) {
     const body = await res.text();
-    coreExports.setFailed(`Registry returned ${res.status}: ${body}`);
-    return
+    throw new Error(`Registry returned ${res.status}: ${body}`)
   }
 
   let data;
   try {
     data = await res.json();
   } catch (err) {
-    coreExports.setFailed(`Failed to parse registry JSON: ${err.message}`);
-    return
+    throw new Error(`Failed to parse registry JSON: ${err.message}`)
   }
 
   const tags = Array.isArray(data.tags) ? data.tags : [];

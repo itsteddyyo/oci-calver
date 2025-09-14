@@ -46,8 +46,10 @@ inputs:
 
 # Define your outputs here.
 outputs:
-  calver:
-    description: 'Computed calVer (YYYY.MM.N)'
+  current:
+    description: 'The current newest CalVer tag found in the registry'
+  new:
+    description: 'The new CalVer tag computed by this action'
 
 runs:
   using: node24

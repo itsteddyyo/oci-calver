@@ -41205,122 +41205,6 @@ union([
     record(NonEmptyString, union([literal(true), CalVerPrereleaseName]).optional()),
 ]);
 
-/**
- * The main function for the action.
- *
- * @returns {Promise<void>} Resolves when the action is complete.
- */
-async function run() {
-  try {
-    const ociRepo = coreExports.getInput('oci_repository', { required: true });
-    const authMode = coreExports.getInput('auth_mode') || 'basic';
-    const username = coreExports.getInput('registry_username');
-    const password = coreExports.getInput('registry_password');
-    const scheme = coreExports.getInput('oci_registry_scheme') || 'https';
-    const timeoutSeconds = parseInt(
-      coreExports.getInput('timeout_seconds') || '10',
-      10
-    );
-    const calverFormat = coreExports.getInput('calver_format') || 'YYYY.MM.MICRO';
-
-    if (!['noauth', 'basic', 'bearer'].includes(authMode)) {
-      coreExports.setFailed(`Invalid auth_mode: ${authMode}`);
-      return
-    }
-    if (authMode === 'basic' && (!username || !password)) {
-      coreExports.setFailed(
-        'registry_username and registry_password are required for basic auth'
-      );
-      return
-    }
-    if (authMode === 'bearer' && !password) {
-      coreExports.setFailed(
-        'registry_password (bearer token) is required for bearer auth'
-      );
-      return
-    }
-
-    const parsedRepo = parseOciReference(ociRepo);
-
-    const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`;
-
-    const headers = { Accept: 'application/json' };
-    if (authMode === 'basic') {
-      const token = Buffer.from(`${username}:${password}`).toString('base64');
-      headers['Authorization'] = `Basic ${token}`;
-    } else if (authMode === 'bearer') {
-      headers['Authorization'] = `Bearer ${password}`;
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-
-    let res;
-    try {
-      res = await fetch(url, { headers, signal: controller.signal });
-    } catch (err) {
-      coreExports.setFailed(`Failed to call registry: ${err.message}`);
-      return
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (!res.ok) {
-      const body = await res.text();
-      coreExports.setFailed(`Registry returned ${res.status}: ${body}`);
-      return
-    }
-
-    let data;
-    try {
-      data = await res.json();
-    } catch (err) {
-      coreExports.setFailed(`Failed to parse registry JSON: ${err.message}`);
-      return
-    }
-
-    const tags = Array.isArray(data.tags) ? data.tags : [];
-    tags.push('latest');
-    coreExports.info(`Found ${tags.length} tags in ${ociRepo}`);
-    coreExports.debug(`Tags: ${tags.join(',')}`);
-    const validTags = [];
-    for (const tag of tags) {
-      if (isValidCalVer(calverFormat, tag)) {
-        validTags.push(tag);
-      } else {
-        coreExports.debug(`Skipping non-calver tag: ${tag}`);
-      }
-    }
-
-    coreExports.debug(`Valid calver tags: ${validTags.join(',')}`);
-
-    let newestTag = getLatestCalVer(calverFormat, validTags);
-    coreExports.debug(`Current tag: ${newestTag || 'none'}`);
-
-    if (!newestTag) {
-      newestTag = formatCalVer(calverFormat, {
-        tokenValues: {
-          year: new Date().getFullYear(),
-          month: new Date().getMonth(), // last month so no +1
-          micro: 0
-        }
-      });
-    }
-
-    try {
-      newestTag = increaseCalVer('major', calverFormat, newestTag || '');
-    } catch (err) {
-      newestTag = increaseCalVer('micro', calverFormat, newestTag || '');
-    }
-
-    coreExports.setOutput('calver', newestTag);
-    coreExports.info(`Computed calver: ${newestTag}`);
-  } catch (error) {
-    // Fail the workflow run if an error occurs
-    if (error instanceof Error) coreExports.setFailed(error.message);
-  }
-}
-
 function parseOciReference(ref) {
   if (!ref || typeof ref !== 'string') {
     throw new Error('Invalid image reference')
@@ -41350,6 +41234,132 @@ function parseOciReference(ref) {
   }
 
   return { host, repo: repoPath }
+}
+
+/**
+ * The main function for the action.
+ *
+ * @returns {Promise<void>} Resolves when the action is complete.
+ */
+async function run() {
+  try {
+    const calverFormat = coreExports.getInput('calver_format') || 'YYYY.MM.MICRO';
+
+    const tags = await getOciTags();
+    coreExports.info(`Found ${tags.length} tags`);
+    coreExports.debug(`Tags: ${tags.join(',')}`);
+
+    const validTags = [];
+    for (const tag of tags) {
+      if (isValidCalVer(calverFormat, tag)) {
+        validTags.push(tag);
+      } else {
+        coreExports.debug(`Skipping non-calver tag: ${tag}`);
+      }
+    }
+
+    coreExports.debug(`Valid calver tags: ${validTags.join(',')}`);
+
+    const currentTag = getLatestCalVer(calverFormat, validTags);
+    coreExports.debug(`Current tag: ${currentTag || 'none'}`);
+
+    const fallbackTag = formatCalVer(calverFormat, {
+      tokenValues: {
+        year: new Date().getFullYear(),
+        month: new Date().getMonth(), // last month so no +1
+        micro: 0
+      }
+    });
+
+    let newTag = null;
+    try {
+      newTag = increaseCalVer(
+        'major',
+        calverFormat,
+        currentTag || fallbackTag
+      );
+    } catch (err) {
+      newTag = increaseCalVer(
+        'micro',
+        calverFormat,
+        currentTag || fallbackTag
+      );
+    }
+    coreExports.info(`Computed calver: ${newTag}`);
+
+    coreExports.setOutput('current', currentTag);
+    coreExports.setOutput('new', newTag);
+  } catch (error) {
+    // Fail the workflow run if an error occurs
+    if (error instanceof Error) coreExports.setFailed(error.message);
+  }
+}
+
+async function getOciTags() {
+  const authMode = coreExports.getInput('auth_mode') || 'basic';
+  const username = coreExports.getInput('registry_username');
+  const password = coreExports.getInput('registry_password');
+  const scheme = coreExports.getInput('oci_registry_scheme') || 'https';
+  const ociRepo = coreExports.getInput('oci_repository', { required: true });
+
+  const parsedRepo = parseOciReference(ociRepo);
+  const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`;
+  const timeoutSeconds = parseInt(coreExports.getInput('timeout_seconds') || '10', 10);
+
+  if (!['noauth', 'basic', 'bearer'].includes(authMode)) {
+    coreExports.setFailed(`Invalid auth_mode: ${authMode}`);
+    return
+  }
+  if (authMode === 'basic' && (!username || !password)) {
+    coreExports.setFailed(
+      'registry_username and registry_password are required for basic auth'
+    );
+    return
+  }
+  if (authMode === 'bearer' && !password) {
+    coreExports.setFailed(
+      'registry_password (bearer token) is required for bearer auth'
+    );
+    return
+  }
+
+  const headers = { Accept: 'application/json' };
+  if (authMode === 'basic') {
+    const token = Buffer.from(`${username}:${password}`).toString('base64');
+    headers['Authorization'] = `Basic ${token}`;
+  } else if (authMode === 'bearer') {
+    headers['Authorization'] = `Bearer ${password}`;
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
+
+  let res;
+  try {
+    res = await fetch(url, { headers, signal: controller.signal });
+  } catch (err) {
+    coreExports.setFailed(`Failed to call registry: ${err.message}`);
+    return
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!res.ok) {
+    const body = await res.text();
+    coreExports.setFailed(`Registry returned ${res.status}: ${body}`);
+    return
+  }
+
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    coreExports.setFailed(`Failed to parse registry JSON: ${err.message}`);
+    return
+  }
+
+  const tags = Array.isArray(data.tags) ? data.tags : [];
+  return tags
 }
 
 /**

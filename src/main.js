@@ -79,7 +79,7 @@ export async function run() {
     tags.push('latest')
     core.info(`Found ${tags.length} tags in ${ociRepo}`)
     core.debug(`Tags: ${tags.join(',')}`)
-    let validTags = []
+    const validTags = []
     for (const tag of tags) {
       if (calver.isValidCalVer(calverFormat, tag)) {
         validTags.push(tag)
@@ -87,8 +87,6 @@ export async function run() {
         core.debug(`Skipping non-calver tag: ${tag}`)
       }
     }
-
-    validTags = []
 
     core.debug(`Valid calver tags: ${validTags.join(',')}`)
 

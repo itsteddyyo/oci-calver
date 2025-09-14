@@ -57,7 +57,9 @@ jobs:
         id: test-action
         uses: ./
         with:
-          milliseconds: 2000
+          oci_repository: ghcr.io/username/repository
+          auth_mode: noauth
+          calver_format: YYYY.MM.MICRO
 
       - name: Print Output
         id: output

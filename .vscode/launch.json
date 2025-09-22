@@ -10,6 +10,22 @@
       "args": ["@github/local-action", ".", "src/main.js", ".env"],
       "console": "integratedTerminal",
       "skipFiles": ["<node_internals>/**", "node_modules/**"]
+    },
+    {
+      "name": "Debug Jest Tests",
+      "type": "node",
+      "env": {
+        "NODE_OPTIONS": "--experimental-vm-modules",
+        "NODE_NO_WARNINGS": "1"
+      },
+      "request": "launch",
+      "runtimeArgs": [
+        "--inspect-brk",
+        "${workspaceRoot}/node_modules/.bin/jest",
+        "--runInBand"
+      ],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
     }
   ]
 }

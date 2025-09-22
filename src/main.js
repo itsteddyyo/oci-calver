@@ -67,8 +67,6 @@ async function getOciTags() {
   const password = core.getInput('registry_password')
   const scheme = core.getInput('oci_registry_scheme') || 'https'
   const ociRepo = core.getInput('oci_repository', { required: true })
-  const allowInitialNonexistent =
-    core.getInput('allow_initial_nonexistent') == 'true'
 
   const parsedRepo = parseOciReference(ociRepo)
   const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`

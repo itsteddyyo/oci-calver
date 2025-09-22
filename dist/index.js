@@ -41301,7 +41301,6 @@ async function getOciTags() {
   const password = coreExports.getInput('registry_password');
   const scheme = coreExports.getInput('oci_registry_scheme') || 'https';
   const ociRepo = coreExports.getInput('oci_repository', { required: true });
-  coreExports.getInput('allow_initial_nonexistent') == 'true';
 
   const parsedRepo = parseOciReference(ociRepo);
   const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`;

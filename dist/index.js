@@ -41240,7 +41240,13 @@ function parseOciReference(ref) {
     repoPath = `library/${repoPath}`;
   }
 
-  return { host, repo: repoPath }
+  // Only Docker Hub has other domain for the API
+  let apiHost = host;
+  if (host === 'docker.io') {
+    apiHost = 'hub.docker.com';
+  }
+
+  return { host, apiHost, repo: repoPath }
 }
 
 /**
@@ -41310,7 +41316,7 @@ async function getOciTags() {
   const ociRepo = coreExports.getInput('oci_repository', { required: true });
 
   const parsedRepo = parseOciReference(ociRepo);
-  const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`;
+  const url = `${scheme}://${parsedRepo.apiHost}/v2/${parsedRepo.repo}/tags/list`;
   const timeoutSeconds = parseInt(coreExports.getInput('timeout_seconds') || '10', 10);
 
   if (!['noauth', 'basic', 'bearer'].includes(authMode)) {

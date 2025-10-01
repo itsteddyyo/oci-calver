@@ -26,5 +26,11 @@ export function parseOciReference(ref) {
     repoPath = `library/${repoPath}`
   }
 
-  return { host, repo: repoPath }
+  // Only Docker Hub has other domain for the API
+  let apiHost = host
+  if (host === 'docker.io') {
+    apiHost = 'hub.docker.com'
+  }
+
+  return { host, apiHost, repo: repoPath }
 }

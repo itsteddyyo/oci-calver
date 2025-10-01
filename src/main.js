@@ -69,7 +69,7 @@ async function getOciTags() {
   const ociRepo = core.getInput('oci_repository', { required: true })
 
   const parsedRepo = parseOciReference(ociRepo)
-  const url = `${scheme}://${parsedRepo.host}/v2/${parsedRepo.repo}/tags/list`
+  const url = `${scheme}://${parsedRepo.apiHost}/v2/${parsedRepo.repo}/tags/list`
   const timeoutSeconds = parseInt(core.getInput('timeout_seconds') || '10', 10)
 
   if (!['noauth', 'basic', 'bearer'].includes(authMode)) {

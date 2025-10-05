@@ -64,6 +64,7 @@ describe('main.js', () => {
   it('Test output', async () => {
     await run()
 
+    expect(core.setFailed).toHaveBeenCalledTimes(0)
     expect(core.setOutput).toHaveBeenNthCalledWith(1, 'current', '2023.2.0')
     expect(core.setOutput).toHaveBeenNthCalledWith(2, 'new', '2025.6.0')
   })
@@ -73,14 +74,17 @@ describe('main.js', () => {
 
     await run()
 
+    expect(core.setFailed).toHaveBeenCalledTimes(0)
     expect(core.setOutput).toHaveBeenNthCalledWith(1, 'current', '2023.2.0')
     expect(core.setOutput).toHaveBeenNthCalledWith(2, 'new', '2023.2.1')
   })
 
-  it('Test output with different format', async () => {
+  it('Test output with different format (+bearer)', async () => {
     core.getInput.mockImplementation((input) => {
       if (input === 'calver_format') {
         return 'YYYY.0M.MICRO'
+      } else if (input === 'auth_mode') {
+        return 'bearer'
       } else {
         return defaultGetInput(input)
       }
@@ -88,20 +92,134 @@ describe('main.js', () => {
 
     await run()
 
+    expect(core.setFailed).toHaveBeenCalledTimes(0)
     expect(core.setOutput).toHaveBeenNthCalledWith(1, 'current', '2022.02.0')
     expect(core.setOutput).toHaveBeenNthCalledWith(2, 'new', '2025.06.0')
   })
 
-  it('Test failed output', async () => {
+  it('Test output with non-existing repo', async () => {
     core.setFailed.mockImplementation()
     global.fetch = jest.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve()
+      status: 404
     })
 
     await run()
 
-    expect(core.setFailed).toHaveBeenCalledTimes(1)
+    expect(core.setFailed).toHaveBeenCalledTimes(0)
+    expect(core.setOutput).toHaveBeenNthCalledWith(1, 'current', undefined)
+    expect(core.setOutput).toHaveBeenNthCalledWith(2, 'new', '2025.6.0')
+  })
+
+  it('Test output with non-handled status', async () => {
+    core.setFailed.mockImplementation()
+    global.fetch = jest.fn().mockResolvedValue({
+      status: 418,
+      statusText: "I'm a teapot"
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(1, "418: I'm a teapot")
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test output with non-handled body', async () => {
+    core.setFailed.mockImplementation()
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.reject(new Error('Invalid JSON'))
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(
+      1,
+      'Failed to parse registry JSON: Invalid JSON'
+    )
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test failed api call', async () => {
+    core.setFailed.mockImplementation()
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network Error'))
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(
+      1,
+      'Failed to call registry: Network Error'
+    )
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test wrong inputs - unknown auth method', async () => {
+    core.getInput.mockImplementation((input) => {
+      if (input === 'auth_mode') {
+        return 'abc'
+      } else {
+        return defaultGetInput(input)
+      }
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(1, 'Invalid auth_mode: abc')
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test wrong inputs - basic but no password', async () => {
+    core.getInput.mockImplementation((input) => {
+      if (input === 'registry_password') {
+        return null
+      } else {
+        return defaultGetInput(input)
+      }
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(
+      1,
+      'registry_username and registry_password are required for basic auth'
+    )
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test wrong inputs - bearer but no password', async () => {
+    core.getInput.mockImplementation((input) => {
+      if (input === 'auth_mode') {
+        return 'bearer'
+      } else if (input === 'registry_password') {
+        return null
+      } else {
+        return defaultGetInput(input)
+      }
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(
+      1,
+      'registry_password (bearer token) is required for bearer auth'
+    )
+    expect(core.setOutput).toHaveBeenCalledTimes(0)
+  })
+
+  it('Test wrong inputs - basic but no username', async () => {
+    core.getInput.mockImplementation((input) => {
+      if (input === 'registry_username') {
+        return null
+      } else {
+        return defaultGetInput(input)
+      }
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenNthCalledWith(
+      1,
+      'registry_username and registry_password are required for basic auth'
+    )
     expect(core.setOutput).toHaveBeenCalledTimes(0)
   })
 })

@@ -112,8 +112,7 @@ async function getOciTags() {
   }
 
   if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Registry returned ${res.status}: ${body}`)
+    throw new Error(`${res.status}: ${res.statusText}`)
   }
 
   let data

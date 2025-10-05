@@ -9,7 +9,7 @@
 Use this template to bootstrap the creation of a JavaScript action. :rocket:
 
 This template includes compilation support, tests, a validation workflow, publishing, and versioning guidance.
-
+a
 If you are new, there's also a simpler introduction in the
 [Hello world JavaScript action repository](https://github.com/actions/hello-world-javascript-action).
 

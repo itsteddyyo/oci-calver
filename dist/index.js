@@ -41212,7 +41212,7 @@ union([
     record(NonEmptyString, union([literal(true), CalVerPrereleaseName]).optional()),
 ]);
 
-function parseOciReference(ref) {
+function parseDockerReference(ref) {
     if (!ref || typeof ref !== "string") {
         throw new Error("Invalid image reference");
     }
@@ -41253,7 +41253,7 @@ async function run() {
     try {
         const calverFormat = coreExports.getInput("calver_format") || "YYYY.MM.MICRO";
 
-        const tags = await getOciTags();
+        const tags = await getDockerTags();
         coreExports.info(`Found ${tags.length} tags`);
         coreExports.debug(`Tags: ${tags.join(",")}`);
 
@@ -41295,16 +41295,15 @@ async function run() {
     }
 }
 
-async function getOciTags() {
+async function getDockerTags() {
     const authMode = coreExports.getInput("auth_mode") || "basic";
     const username = coreExports.getInput("registry_username");
     const password = coreExports.getInput("registry_password");
-    const scheme = coreExports.getInput("oci_registry_scheme") || "https";
-    const ociRepo = coreExports.getInput("oci_repository", {required: true});
+    const scheme = coreExports.getInput("registry_scheme") || "https";
+    const repo = coreExports.getInput("repository", {required: true});
 
-    const parsedRepo = parseOciReference(ociRepo);
+    const parsedRepo = parseDockerReference(repo);
     const url = `${scheme}://${parsedRepo.apiHost}/v2/${parsedRepo.repo}/tags/list`;
-    const timeoutSeconds = parseInt(coreExports.getInput("timeout_seconds") || "10", 10);
 
     if (!["noauth", "basic", "bearer"].includes(authMode)) {
         throw new Error(`Invalid auth_mode: ${authMode}`);
@@ -41324,16 +41323,11 @@ async function getOciTags() {
         headers["Authorization"] = `Bearer ${password}`;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutSeconds * 1000);
-
     let res;
     try {
-        res = await fetch(url, {headers, signal: controller.signal});
+        res = await fetch(url, {headers});
     } catch (err) {
         throw new Error(`Failed to call registry: ${err.message}`);
-    } finally {
-        clearTimeout(timeout);
     }
 
     if (res.status == 404) {
@@ -41352,8 +41346,7 @@ async function getOciTags() {
         throw new Error(`Failed to parse registry JSON: ${err.message}`);
     }
 
-    const tags = Array.isArray(data.tags) ? data.tags : [];
-    return tags;
+    return Array.isArray(data.tags) ? data.tags : [];
 }
 
 /**

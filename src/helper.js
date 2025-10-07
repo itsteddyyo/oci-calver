@@ -1,4 +1,4 @@
-export function parseOciReference(ref) {
+export function parseDockerReference(ref) {
     if (!ref || typeof ref !== "string") {
         throw new Error("Invalid image reference");
     }

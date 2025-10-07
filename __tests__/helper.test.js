@@ -1,10 +1,10 @@
 import {jest} from "@jest/globals";
 
-const {parseOciReference} = await import("../src/helper.js");
+const {parseDockerReference} = await import("../src/helper.js");
 
 describe("helper.js", () => {
     it("Test parseReference without registry", async () => {
-        const reference = parseOciReference("redis");
+        const reference = parseDockerReference("redis");
 
         expect(reference).toEqual({
             host: "docker.io",
@@ -14,7 +14,7 @@ describe("helper.js", () => {
     });
 
     it("Test parseReference with docker registry", async () => {
-        const reference = parseOciReference("docker.io/redis");
+        const reference = parseDockerReference("docker.io/redis");
 
         expect(reference).toEqual({
             host: "docker.io",
@@ -24,7 +24,7 @@ describe("helper.js", () => {
     });
 
     it("Test parseReference with registry", async () => {
-        const reference = parseOciReference("ghcr.io/redis");
+        const reference = parseDockerReference("ghcr.io/redis");
 
         expect(reference).toEqual({
             host: "ghcr.io",
@@ -34,7 +34,7 @@ describe("helper.js", () => {
     });
 
     it("Test parseReference with registry and namespace", async () => {
-        const reference = parseOciReference("ghcr.io/namespace/redis");
+        const reference = parseDockerReference("ghcr.io/namespace/redis");
 
         expect(reference).toEqual({
             host: "ghcr.io",
@@ -44,7 +44,7 @@ describe("helper.js", () => {
     });
 
     it("Test parseReference failing", async () => {
-        expect(() => parseOciReference(123)).toThrow("Invalid image reference");
+        expect(() => parseDockerReference(123)).toThrow("Invalid image reference");
     });
 });
 

@@ -16,9 +16,9 @@ const {run} = await import("../src/main.js");
 
 const defaultGetInput = (input) => {
     switch (input) {
-        case "oci_repository":
+        case "repository":
             return "ghcr.io/owner/repo";
-        case "oci_registry_scheme":
+        case "registry_scheme":
             return "https";
         case "auth_mode":
             return "basic";
@@ -26,8 +26,6 @@ const defaultGetInput = (input) => {
             return "user";
         case "registry_password":
             return "pass";
-        case "timeout_seconds":
-            return "1";
         case "calver_format":
             return "YYYY.MM.MICRO";
         default:

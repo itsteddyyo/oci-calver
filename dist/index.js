@@ -41218,30 +41218,40 @@ function parseDockerReference(ref) {
     }
 
     const parts = ref.split("/");
-    let host, repoPath;
+    let registry, repoPath;
 
-    if (parts.length > 1 && (parts[0].includes(".") || parts[0].includes(":") || parts[0] === "localhost")) {
+    if (parts.length > 1 && (parts[0].includes(".") || parts[0].includes(":") || parts[0] === "localregistry")) {
         // Registry explicitly specified
-        host = parts[0];
+        registry = parts[0];
         repoPath = parts.slice(1).join("/");
     } else {
         // Default to Docker Hub
-        host = "docker.io";
+        registry = "docker.io";
         repoPath = ref;
     }
 
     // Only Docker Hub has the implicit "library" namespace
-    if (host === "docker.io" && !repoPath.includes("/")) {
+    if (registry === "docker.io" && !repoPath.includes("/")) {
         repoPath = `library/${repoPath}`;
     }
 
-    // Only Docker Hub has other domain for the API
-    let apiHost = host;
-    if (host === "docker.io") {
-        apiHost = "hub.docker.com";
-    }
+    return {registry, repository: repoPath};
+}
 
-    return {host, apiHost, repo: repoPath};
+function getAPIInfo(registry, registryScheme, repository) {
+    switch (registry) {
+        case "docker.io":
+            return {
+                url: `${registryScheme}://hub.docker.com/v2/repositories/${repository}/tags`,
+                extractTags: (data) => (data.results || []).map((tag) => tag.name),
+            };
+        default:
+            // Generic Docker Registry API v2 endpoint
+            return {
+                url: `${registryScheme}://${registry}/v2/${repository}/tags/list`,
+                extractTags: (data) => data.tags || [],
+            };
+    }
 }
 
 /**
@@ -41251,11 +41261,18 @@ function parseDockerReference(ref) {
  */
 async function run() {
     try {
-        const calverFormat = coreExports.getInput("calver_format") || "YYYY.MM.MICRO";
+        const calverFormat = coreExports.getInput("calver_format", {required: false, trimWhitespace: true});
+        const calverPrefix = coreExports.getInput("calver_prefix", {required: false, trimWhitespace: true});
 
-        const tags = await getDockerTags();
+        let tags = await getDockerTags();
         coreExports.info(`Found ${tags.length} tags`);
         coreExports.debug(`Tags: ${tags.join(",")}`);
+
+        if (calverPrefix != "") {
+            const prefixRegex = new RegExp(`^${calverPrefix}`, "g");
+            tags = tags.map((tag) => tag.replace(prefixRegex, ""));
+            coreExports.debug(`Stripped prefix '${calverPrefix}' from tags`);
+        }
 
         const validTags = [];
         for (const tag of tags) {
@@ -41287,8 +41304,14 @@ async function run() {
         }
         coreExports.info(`Computed calver: ${newTag}`);
 
-        coreExports.setOutput("current", currentTag);
-        coreExports.setOutput("new", newTag);
+        if (calverPrefix != "") {
+            coreExports.setOutput("current", currentTag ? `${calverPrefix}${currentTag}` : currentTag);
+            coreExports.setOutput("new", `${calverPrefix}${newTag}`);
+            coreExports.debug(`Adding prefix '${calverPrefix}' to tags`);
+        } else {
+            coreExports.setOutput("current", currentTag);
+            coreExports.setOutput("new", newTag);
+        }
     } catch (error) {
         // Fail the workflow run if an error occurs
         if (error instanceof Error) coreExports.setFailed(error.message);
@@ -41296,23 +41319,17 @@ async function run() {
 }
 
 async function getDockerTags() {
-    const authMode = coreExports.getInput("auth_mode") || "basic";
-    const username = coreExports.getInput("registry_username");
-    const password = coreExports.getInput("registry_password");
-    const scheme = coreExports.getInput("registry_scheme") || "https";
-    const repo = coreExports.getInput("repository", {required: true});
+    const repo = coreExports.getInput("repository", {required: true, trimWhitespace: true});
+    const authMode = coreExports.getInput("auth_mode", {required: false, trimWhitespace: true});
+    const scheme = coreExports.getInput("registry_scheme", {required: false, trimWhitespace: true});
+    const username = coreExports.getInput("registry_username", {required: authMode == "basic", trimWhitespace: true});
+    const password = coreExports.getInput("registry_password", {required: ["basic", "bearer"].includes(authMode), trimWhitespace: true});
 
     const parsedRepo = parseDockerReference(repo);
-    const url = `${scheme}://${parsedRepo.apiHost}/v2/${parsedRepo.repo}/tags/list`;
+    const APIInfo = getAPIInfo(parsedRepo.registry, scheme, parsedRepo.repository);
 
     if (!["noauth", "basic", "bearer"].includes(authMode)) {
         throw new Error(`Invalid auth_mode: ${authMode}`);
-    }
-    if (authMode == "basic" && (!username || !password)) {
-        throw new Error(`registry_username and registry_password are required for basic auth`);
-    }
-    if (authMode == "bearer" && !password) {
-        throw new Error("registry_password (bearer token) is required for bearer auth");
     }
 
     const headers = {Accept: "application/json"};
@@ -41325,7 +41342,7 @@ async function getDockerTags() {
 
     let res;
     try {
-        res = await fetch(url, {headers});
+        res = await fetch(APIInfo.url, {headers});
     } catch (err) {
         throw new Error(`Failed to call registry: ${err.message}`);
     }
@@ -41346,7 +41363,7 @@ async function getDockerTags() {
         throw new Error(`Failed to parse registry JSON: ${err.message}`);
     }
 
-    return Array.isArray(data.tags) ? data.tags : [];
+    return APIInfo.extractTags(data);
 }
 
 /**

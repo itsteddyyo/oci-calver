@@ -13,15 +13,19 @@ inputs:
         required: false
         default: "https"
     auth_mode:
-        description: "Authentication mode: noauth, basic, bearer (default: none)"
+        description: "Authentication mode: noauth, basic, bearer (default: noauth)"
         required: false
-        default: "none"
+        default: "noauth"
     registry_username:
         description: "Username for basic auth (required if auth_mode=basic)"
         required: false
     registry_password:
         description: "Password for basic auth (required if auth_mode=basic). Token for bearer auth (required if auth_mode=bearer)."
         required: false
+    calver_prefix:
+        description: "Prefix to add to the CalVer tag, e.g. 'v' to get tags like 'v2024.06.1' (default: '')"
+        required: false
+        default: ""
     calver_format:
         description:
             "CalVer format to use. See https://www.npmjs.com/package/@lets-release/calver and

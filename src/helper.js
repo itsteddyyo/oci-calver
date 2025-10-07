@@ -4,28 +4,38 @@ export function parseDockerReference(ref) {
     }
 
     const parts = ref.split("/");
-    let host, repoPath;
+    let registry, repoPath;
 
-    if (parts.length > 1 && (parts[0].includes(".") || parts[0].includes(":") || parts[0] === "localhost")) {
+    if (parts.length > 1 && (parts[0].includes(".") || parts[0].includes(":") || parts[0] === "localregistry")) {
         // Registry explicitly specified
-        host = parts[0];
+        registry = parts[0];
         repoPath = parts.slice(1).join("/");
     } else {
         // Default to Docker Hub
-        host = "docker.io";
+        registry = "docker.io";
         repoPath = ref;
     }
 
     // Only Docker Hub has the implicit "library" namespace
-    if (host === "docker.io" && !repoPath.includes("/")) {
+    if (registry === "docker.io" && !repoPath.includes("/")) {
         repoPath = `library/${repoPath}`;
     }
 
-    // Only Docker Hub has other domain for the API
-    let apiHost = host;
-    if (host === "docker.io") {
-        apiHost = "hub.docker.com";
-    }
+    return {registry, repository: repoPath};
+}
 
-    return {host, apiHost, repo: repoPath};
+export function getAPIInfo(registry, registryScheme, repository) {
+    switch (registry) {
+        case "docker.io":
+            return {
+                url: `${registryScheme}://hub.docker.com/v2/repositories/${repository}/tags`,
+                extractTags: (data) => (data.results || []).map((tag) => tag.name),
+            };
+        default:
+            // Generic Docker Registry API v2 endpoint
+            return {
+                url: `${registryScheme}://${registry}/v2/${repository}/tags/list`,
+                extractTags: (data) => data.tags || [],
+            };
+    }
 }

@@ -10,36 +10,16 @@ import * as core from "../__fixtures__/core.js";
 
 // Mocks should be declared before the module being tested is imported.
 jest.unstable_mockModule("@actions/core", () => core);
+
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
 const {run} = await import("../src/main.js");
-
-const defaultGetInput = (input) => {
-    switch (input) {
-        case "repository":
-            return "ghcr.io/owner/repo";
-        case "registry_scheme":
-            return "https";
-        case "auth_mode":
-            return "basic";
-        case "registry_username":
-            return "user";
-        case "registry_password":
-            return "pass";
-        case "calver_format":
-            return "YYYY.MM.MICRO";
-        default:
-            return "";
-    }
-};
+const OLD_ENV = {...process.env};
 
 describe("main.js", () => {
     beforeEach(() => {
         jest.useFakeTimers("modern");
         jest.setSystemTime(new Date(2025, 5, 1));
-
-        // Set the action's inputs as return values from core.getInput().
-        core.getInput.mockImplementation(defaultGetInput);
 
         global.fetch = jest.fn().mockResolvedValue({
             ok: true,
@@ -68,22 +48,24 @@ describe("main.js", () => {
         expect(core.setOutput).toHaveBeenNthCalledWith(2, "new", "2023.2.1");
     });
 
-    it("Test output with different format (+bearer)", async () => {
-        core.getInput.mockImplementation((input) => {
-            if (input === "calver_format") {
-                return "YYYY.0M.MICRO";
-            } else if (input === "auth_mode") {
-                return "bearer";
-            } else {
-                return defaultGetInput(input);
-            }
-        });
+    it("Test output with different format", async () => {
+        process.env["INPUT_CALVER_FORMAT"] = "YYYY.0M.MICRO";
 
         await run();
 
         expect(core.setFailed).toHaveBeenCalledTimes(0);
         expect(core.setOutput).toHaveBeenNthCalledWith(1, "current", "2022.02.0");
         expect(core.setOutput).toHaveBeenNthCalledWith(2, "new", "2025.06.0");
+    });
+
+    it("Test output with prefix", async () => {
+        process.env["INPUT_CALVER_PREFIX"] = "v";
+
+        await run();
+
+        expect(core.setFailed).toHaveBeenCalledTimes(0);
+        expect(core.setOutput).toHaveBeenNthCalledWith(1, "current", "v2023.2.0");
+        expect(core.setOutput).toHaveBeenNthCalledWith(2, "new", "v2025.6.0");
     });
 
     it("Test output with non-existing repo", async () => {
@@ -136,13 +118,7 @@ describe("main.js", () => {
     });
 
     it("Test wrong inputs - unknown auth method", async () => {
-        core.getInput.mockImplementation((input) => {
-            if (input === "auth_mode") {
-                return "abc";
-            } else {
-                return defaultGetInput(input);
-            }
-        });
+        process.env["INPUT_AUTH_MODE"] = "abc";
 
         await run();
 
@@ -151,53 +127,37 @@ describe("main.js", () => {
     });
 
     it("Test wrong inputs - basic but no password", async () => {
-        core.getInput.mockImplementation((input) => {
-            if (input === "registry_password") {
-                return null;
-            } else {
-                return defaultGetInput(input);
-            }
-        });
+        process.env["INPUT_AUTH_MODE"] = "basic";
+        process.env["INPUT_REGISTRY_PASSWORD"] = null;
 
         await run();
 
-        expect(core.setFailed).toHaveBeenNthCalledWith(1, "registry_username and registry_password are required for basic auth");
+        expect(core.setFailed).toHaveBeenNthCalledWith(1, "Input required and not supplied: registry_password");
         expect(core.setOutput).toHaveBeenCalledTimes(0);
     });
 
     it("Test wrong inputs - bearer but no password", async () => {
-        core.getInput.mockImplementation((input) => {
-            if (input === "auth_mode") {
-                return "bearer";
-            } else if (input === "registry_password") {
-                return null;
-            } else {
-                return defaultGetInput(input);
-            }
-        });
+        process.env["INPUT_AUTH_MODE"] = "bearer";
+        process.env["INPUT_REGISTRY_PASSWORD"] = null;
 
         await run();
 
-        expect(core.setFailed).toHaveBeenNthCalledWith(1, "registry_password (bearer token) is required for bearer auth");
+        expect(core.setFailed).toHaveBeenNthCalledWith(1, "Input required and not supplied: registry_password");
         expect(core.setOutput).toHaveBeenCalledTimes(0);
     });
 
     it("Test wrong inputs - basic but no username", async () => {
-        core.getInput.mockImplementation((input) => {
-            if (input === "registry_username") {
-                return null;
-            } else {
-                return defaultGetInput(input);
-            }
-        });
+        process.env["INPUT_AUTH_MODE"] = "basic";
+        process.env["INPUT_REGISTRY_USERNAME"] = null;
 
         await run();
 
-        expect(core.setFailed).toHaveBeenNthCalledWith(1, "registry_username and registry_password are required for basic auth");
+        expect(core.setFailed).toHaveBeenNthCalledWith(1, "Input required and not supplied: registry_username");
         expect(core.setOutput).toHaveBeenCalledTimes(0);
     });
 });
 
 afterEach(() => {
     jest.resetAllMocks();
+    process.env = {...OLD_ENV};
 });

@@ -1,5 +1,11 @@
 // See: https://jestjs.io/docs/configuration
 
+import dotenv from "dotenv";
+
+dotenv.config({
+    path: "__fixtures__/.env.jest",
+});
+
 /** @type {import('jest').Config} */
 const jestConfig = {
     clearMocks: true,

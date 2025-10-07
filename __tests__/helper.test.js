@@ -1,15 +1,16 @@
-import {jest} from "@jest/globals";
+import {describe, expect, jest} from "@jest/globals";
+import dockerhub_response from "../__fixtures__/dockerhub_response.json";
+import ghcr_response from "../__fixtures__/ghcr_response.json";
 
-const {parseDockerReference} = await import("../src/helper.js");
+const {parseDockerReference, getAPIInfo} = await import("../src/helper.js");
 
-describe("helper.js", () => {
+describe("parseDockerReference", () => {
     it("Test parseReference without registry", async () => {
         const reference = parseDockerReference("redis");
 
         expect(reference).toEqual({
-            host: "docker.io",
-            apiHost: "hub.docker.com",
-            repo: "library/redis",
+            registry: "docker.io",
+            repository: "library/redis",
         });
     });
 
@@ -17,9 +18,8 @@ describe("helper.js", () => {
         const reference = parseDockerReference("docker.io/redis");
 
         expect(reference).toEqual({
-            host: "docker.io",
-            apiHost: "hub.docker.com",
-            repo: "library/redis",
+            registry: "docker.io",
+            repository: "library/redis",
         });
     });
 
@@ -27,9 +27,8 @@ describe("helper.js", () => {
         const reference = parseDockerReference("ghcr.io/redis");
 
         expect(reference).toEqual({
-            host: "ghcr.io",
-            apiHost: "ghcr.io",
-            repo: "redis",
+            registry: "ghcr.io",
+            repository: "redis",
         });
     });
 
@@ -37,14 +36,28 @@ describe("helper.js", () => {
         const reference = parseDockerReference("ghcr.io/namespace/redis");
 
         expect(reference).toEqual({
-            host: "ghcr.io",
-            apiHost: "ghcr.io",
-            repo: "namespace/redis",
+            registry: "ghcr.io",
+            repository: "namespace/redis",
         });
     });
 
     it("Test parseReference failing", async () => {
         expect(() => parseDockerReference(123)).toThrow("Invalid image reference");
+    });
+});
+
+describe("getAPIInfo", () => {
+    it("Test getAPIInfo for docker.io", async () => {
+        const APIInfo = getAPIInfo("docker.io", "https", "library/redis");
+        const result = APIInfo.extractTags(dockerhub_response);
+        expect(result[0]).toEqual("latest");
+        expect(APIInfo.url).toEqual("https://hub.docker.com/v2/repositories/library/redis/tags");
+    });
+    it("Test getAPIInfo for ghcr.io", async () => {
+        const APIInfo = getAPIInfo("ghcr.io", "https", "grafana/grafana-operator");
+        const result = APIInfo.extractTags(ghcr_response);
+        expect(result[0]).toEqual("v5.5.2");
+        expect(APIInfo.url).toEqual("https://ghcr.io/v2/grafana/grafana-operator/tags/list");
     });
 });
 
